@@ -9,7 +9,10 @@ import {
 import { HubRestAPIClient } from "@standard-crypto/farcaster-js-hub-rest";
 import { createPublicClient, webSocket, type Hex } from "viem";
 import { getFarcasterUserInfoByAddress } from "./utils/airstack.js";
-import { getAssetMentionName } from "./utils/moxie.js";
+import {
+  getFanTokenDisplayNameAndId,
+  getMoxieTokenTypeBySymbol,
+} from "./utils/moxie.js";
 import { formatNumber } from "./utils/format.js";
 
 const signerPrivateKey = process.env.SIGNER_PRIVATE_KEY;
@@ -22,14 +25,22 @@ const wsClient = createPublicClient({
   transport: webSocket(process.env.WS_RPC_URL || ""),
 });
 
-async function publishToFarcaster(cast: { text: string; url: string }) {
+async function publishToFarcaster(cast: {
+  text: string;
+  url: string;
+  mentionsFids: number[];
+  mentionsPositions: number[];
+}) {
   if (!signerPrivateKey || !fid) {
     throw new Error("No signer private key or account fid provided");
   }
+  const mentions = cast.mentionsFids;
 
   const publishCastResponse = await client.submitCast(
     {
       text: cast.text,
+      mentions: mentions,
+      mentionsPositions: cast.mentionsPositions,
       embeds: [
         {
           url: cast.url,
@@ -43,55 +54,58 @@ async function publishToFarcaster(cast: { text: string; url: string }) {
 }
 
 async function constructMessage(interpreted: any) {
-  const actor = interpreted.user.address.toLowerCase();
   const context = interpreted.context as {
     spender: string;
     beneficiary: string;
   };
+
+  const actor = interpreted.user.address.toLowerCase();
   const spender = context.spender.toLowerCase();
   const beneficiary = context.beneficiary.toLowerCase();
 
   const actorInfo = await getFarcasterUserInfoByAddress(actor);
-  const actorName = actorInfo?.profileName;
-  let beneficiaryInfo;
 
-  if (spender !== beneficiary) {
-    beneficiaryInfo = await getFarcasterUserInfoByAddress(beneficiary);
-  }
+  const beneficiaryInfo =
+    spender !== beneficiary
+      ? await getFarcasterUserInfoByAddress(beneficiary)
+      : null;
 
   const eventType = interpreted.action.includes("Sold") ? "sold" : "bought";
-  const assetSent = interpreted.assetsSent[0];
-  const assetReceived = interpreted.assetsReceived[0];
+  const [assetSent, assetReceived] =
+    eventType === "sold"
+      ? [interpreted.assetsSent[0], interpreted.assetsReceived[0]]
+      : [interpreted.assetsReceived[0], interpreted.assetsSent[0]];
 
-  if (eventType === "sold") {
-    const fanToken = getAssetMentionName(assetSent.asset);
+  let text = ` ${eventType} ${formatNumber(assetSent.amount)} shares of `;
 
-    let text = `@${actorName} ${eventType} ${formatNumber(
-      assetSent.amount
-    )} shares of ${fanToken} for ${formatNumber(assetReceived.amount)} ${
-      assetReceived.asset.symbol
-    }`;
+  let mentionsFids = [actorInfo?.userId];
+  let mentionsPositions = [0];
 
-    if (spender !== beneficiary) {
-      text += ` on behalf of @${beneficiaryInfo?.profileName}`;
-    }
+  const fanTokenType = getMoxieTokenTypeBySymbol(assetSent.asset.symbol);
+  const fanToken = getFanTokenDisplayNameAndId(assetSent.asset);
 
-    return text;
+  if (fanTokenType === "user") {
+    mentionsFids.push(fanToken?.id);
+    mentionsPositions.push(text.length);
   } else {
-    const fanToken = getAssetMentionName(assetReceived.asset);
-
-    let text = `@${actorName} ${eventType} ${formatNumber(
-      assetReceived.amount
-    )} shares of ${fanToken} for ${formatNumber(assetSent.amount)} ${
-      assetSent.asset.symbol
-    }`;
-
-    if (spender !== beneficiary) {
-      text += ` on behalf of @${beneficiaryInfo?.profileName}`;
-    }
-
-    return text;
+    text += `${fanToken?.name}`;
   }
+
+  text += ` for ${formatNumber(assetReceived.amount)} ${
+    assetReceived.asset.symbol
+  }`;
+
+  if (spender !== beneficiary) {
+    text += ` on behalf of `;
+    mentionsFids.push(beneficiaryInfo?.userId);
+    mentionsPositions.push(text.length);
+  }
+
+  return {
+    text,
+    mentionsFids: mentionsFids.map((fid) => Number(fid)),
+    mentionsPositions,
+  };
 }
 
 async function handleTransaction(txHash?: string) {
@@ -110,13 +124,18 @@ async function handleTransaction(txHash?: string) {
 
     const interpreted = transformEvent(decoded);
     if (!interpreted || interpreted.type !== "swap") return;
-    const message = await constructMessage(interpreted);
+    const { text, mentionsFids, mentionsPositions } = await constructMessage(
+      interpreted
+    );
     const etherscanUrl = `${ETHERSCAN_ENDPOINT}/tx/${txHash}`;
 
-    console.log(message);
-    // await publishToFarcaster({ text: message, url: etherscanUrl });
-
-    console.log(message);
+    console.log(text, mentionsFids, mentionsPositions);
+    await publishToFarcaster({
+      text,
+      url: etherscanUrl,
+      mentionsFids,
+      mentionsPositions,
+    });
   } catch (e) {
     console.error(e);
   }
@@ -143,11 +162,20 @@ async function createSubscription() {
 }
 
 async function main() {
-  await handleTransaction(
-    "0xa45dd2b567e1db87e70ef1ed56e4054d75de7eb05df8dec8d36949f82ce6bd04"
-  );
+  const server = Bun.serve({
+    port: process.env.PORT || 3000,
+    fetch(req) {
+      return new Response("Moxie Alerts Bot is running!");
+    },
+  });
 
-  // createSubscription();
+  console.log(`Server running on http://localhost:${server.port}`);
+  await decoder.decodeTransaction({
+    chainID: CHAIN_ID,
+    hash: "0x6dd5ffecfe9d6e2d63fe5ed7b0f3b929dc3fcd4e9a00c8fa1064be65306a3f71",
+  });
+
+  createSubscription();
 }
 
 // Call the main function to start the server

@@ -18,7 +18,8 @@ import { mnemonicToAccount } from "viem/accounts";
 import { ed25519 } from "@noble/curves/ed25519";
 
 //your Farcaster recovery phrase: settings -> advanced -> recovery phrase
-const MNEMONIC = "your mnemonic here";
+const MNEMONIC = "";
+const FID = "";
 
 const CONTRACTS = {
   idRegistry: "0x00000000fcaf86937e41ba038b4fa40baa4b780a" as const,
@@ -68,15 +69,6 @@ export async function createDeveloperSigner(mnemonic: string): Promise<void> {
     `${etherscanEndpoint}${CONTRACTS.idRegistry}`
   ).then((res) => res.json())) as { status: string; result: string };
 
-  const readIdContract = getContract({
-    ...IdContract,
-    abi: JSON.parse(idContractAbi.result),
-    client: {
-      public: publicClient,
-    },
-  });
-
-  const fid = await readIdContract.read.idOf([account.address]);
   const privateKey = ed25519.utils.randomPrivateKey();
   const publicKey = toHex(ed25519.getPublicKey(privateKey));
 
@@ -96,7 +88,7 @@ export async function createDeveloperSigner(mnemonic: string): Promise<void> {
     ...KeyGatewayContract,
     abi: JSON.parse(keyGatewayContractAbi.result),
     functionName: "add",
-    args: [1, publicKey, 1, params], // keyType, publicKey, metadataType, metadata
+    args: [1, publicKey, 1, params], // keyType, key, metadataType, metadata
     account: account,
   });
 

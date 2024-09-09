@@ -7,23 +7,15 @@ query GetFarcasterUserInfoByAddress($address: Address!) {
   ) {
     Social {
       profileName
-      connectedAddresses {
-        address
-        blockchain
-      }
+      userId
     }
   }
 }
 `;
 
-interface ConnectedAddress {
-  address: string;
-  blockchain: string;
-}
-
 interface FarcasterUserInfo {
   profileName: string;
-  connectedAddresses: ConnectedAddress[];
+  userId: string;
 }
 
 interface AirstackResponse {
