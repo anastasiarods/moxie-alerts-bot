@@ -1,0 +1,17 @@
+{
+  "name": "moxie-alerts-bot",
+  "module": "src/index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@3loop/transaction-decoder": "^0.16.0",
+    "@3loop/transaction-interpreter": "^0.5.3",
+    "@standard-crypto/farcaster-js-hub-rest": "^1.4.1",
+    "viem": "^2.9.29"
+  }
+}
