@@ -16,10 +16,12 @@ import {
 import { optimism } from "viem/chains";
 import { mnemonicToAccount } from "viem/accounts";
 import { ed25519 } from "@noble/curves/ed25519";
+import readline from "readline";
 
-//your Farcaster recovery phrase: settings -> advanced -> recovery phrase
-const MNEMONIC = "";
-const FID = "";
+/* This script creates a Farcaster signer for your bot. Input your Farcaster recovery phrase and FID.
+MNEMONIC - To get your Farcaster recovery phrase, go to your Farcaster settings -> advanced -> recovery phrase.
+FID - To get your Farcaster FID, go to your profile page -> 3 dots -> About -> FID.
+*/
 
 const CONTRACTS = {
   idRegistry: "0x00000000fcaf86937e41ba038b4fa40baa4b780a" as const,
@@ -53,7 +55,10 @@ const SIGNED_KEY_REQUEST_TYPE = [
   { name: "deadline", type: "uint256" },
 ] as const;
 
-export async function createDeveloperSigner(mnemonic: string): Promise<void> {
+export async function createDeveloperSigner(
+  mnemonic: string,
+  fid: string
+): Promise<void> {
   const account = mnemonicToAccount(mnemonic);
   const walletClient = createWalletClient({
     account: account,
@@ -179,4 +184,27 @@ async function getSignedMetadataParams(
   ]);
 }
 
-createDeveloperSigner(MNEMONIC);
+// Add this function to get user input
+function askQuestion(query: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise((resolve) =>
+    rl.question(query, (ans) => {
+      rl.close();
+      resolve(ans);
+    })
+  );
+}
+
+// Modify the main function to be async and get user input
+async function main() {
+  const mnemonic = await askQuestion("Enter your Farcaster recovery phrase: ");
+  const fid = await askQuestion("Enter your Farcaster FID: ");
+
+  await createDeveloperSigner(mnemonic, fid);
+}
+
+main().catch(console.error);

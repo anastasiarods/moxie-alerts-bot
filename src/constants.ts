@@ -1,6 +1,6 @@
 export const RPC = {
   8453: {
-    url: process.env.RPC_URL || "",
+    url: process.env.WS_RPC_URL || "",
     supportTraceAPI: false,
   },
 };

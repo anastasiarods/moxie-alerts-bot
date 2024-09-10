@@ -10,8 +10,8 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@3loop/transaction-decoder": "^0.16.0",
-    "@3loop/transaction-interpreter": "^0.5.3",
+    "@3loop/transaction-decoder": "^0.17.0",
+    "@3loop/transaction-interpreter": "^0.5.4",
     "@standard-crypto/farcaster-js-hub-rest": "^1.4.1",
     "viem": "^2.9.29"
   }

@@ -96,12 +96,12 @@ const getPublicClient = (chainId: number) => {
 
   return {
     client: createPublicClient({
-      transport: http(rpc.url),
+      transport: webSocket(rpc.url),
     }),
     config: {
-      supportTraceAPI: rpc.supportTraceAPI,
+      traceAPI: "none",
     },
-  };
+  } as const;
 };
 
 export const decoder = new TransactionDecoder({

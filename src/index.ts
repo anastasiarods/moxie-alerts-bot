@@ -5,6 +5,7 @@ import {
   CHAIN_ID,
   ETHERSCAN_ENDPOINT,
   FARCASTER_HUB_URL,
+  RPC,
 } from "./constants.js";
 import { HubRestAPIClient } from "@standard-crypto/farcaster-js-hub-rest";
 import { createPublicClient, webSocket, type Hex } from "viem";
@@ -23,7 +24,7 @@ const client = new HubRestAPIClient({
 });
 
 const wsClient = createPublicClient({
-  transport: webSocket(process.env.WS_RPC_URL || ""),
+  transport: webSocket(RPC[CHAIN_ID].url),
 });
 
 async function publishToFarcaster(cast: {
@@ -56,18 +57,23 @@ async function publishToFarcaster(cast: {
   console.log(`new cast hash: ${publishCastResponse.hash}`);
 }
 
-function invalidTx(tx: InterpretedTx) {
-  return (
-    tx.type !== "swap" ||
-    tx.assetsSent.length !== 1 ||
-    tx.assetsReceived.length !== 1 ||
-    !tx.assetsSent[0].amount ||
-    !tx.assetsReceived[0].amount ||
-    !tx.assetsSent[0].symbol ||
-    !tx.assetsReceived[0].symbol ||
-    !tx.assetsSent[0].name ||
-    !tx.assetsReceived[0].name
-  );
+function skipTx(tx: InterpretedTx) {
+  if (tx.type !== "swap") return true;
+
+  if (tx.assetsSent.length !== 1 || tx.assetsReceived.length !== 1) return true;
+
+  const [fanToken, moxieToken] = tx.action.includes("Sold")
+    ? [tx.assetsSent[0], tx.assetsReceived[0]]
+    : [tx.assetsReceived[0], tx.assetsSent[0]];
+
+  if (moxieToken.symbol === "MOXIE" && Number(moxieToken.amount) < 1000)
+    return true;
+
+  const fanTokenType = getMoxieTokenTypeBySymbol(fanToken.symbol!);
+
+  if (fanTokenType === "network") return true;
+
+  return false;
 }
 
 async function constructMessage(interpreted: InterpretedTx) {
@@ -79,7 +85,6 @@ async function constructMessage(interpreted: InterpretedTx) {
   const actor = interpreted.user.toLowerCase();
   const spender = context.spender.toLowerCase();
   const beneficiary = context.beneficiary.toLowerCase();
-
   const actorInfo = await getFarcasterUserInfoByAddress(actor);
 
   const beneficiaryInfo =
@@ -88,7 +93,7 @@ async function constructMessage(interpreted: InterpretedTx) {
       : null;
 
   const eventType = interpreted.action.includes("Sold") ? "sold" : "bought";
-  const [assetSent, assetReceived] =
+  const [fanToken, moxieToken] =
     eventType === "sold"
       ? [interpreted.assetsSent[0], interpreted.assetsReceived[0]]
       : [interpreted.assetsReceived[0], interpreted.assetsSent[0]];
@@ -100,28 +105,28 @@ async function constructMessage(interpreted: InterpretedTx) {
     return;
   }
 
-  let text = ` ${eventType} ${formatNumber(assetSent.amount!)} shares of `;
+  let text = ` ${eventType} ${formatNumber(fanToken.amount!)} shares of `;
 
   let mentions = [actorInfo?.userId];
   let mentionsPositions = [0];
   let parentUrl: string | undefined;
 
-  const fanTokenType = getMoxieTokenTypeBySymbol(assetSent.symbol!);
-  const fanToken = getFanTokenDisplayNameAndId({
-    symbol: assetSent.symbol!,
-    name: assetSent.name!,
+  const fanTokenType = getMoxieTokenTypeBySymbol(fanToken.symbol!);
+  const fanTokenInfo = getFanTokenDisplayNameAndId({
+    symbol: fanToken.symbol!,
+    name: fanToken.name!,
   });
 
   switch (fanTokenType) {
     case "user":
-      if (fanToken?.id) {
-        mentions.push(fanToken.id);
+      if (fanTokenInfo?.id) {
+        mentions.push(fanTokenInfo.id);
         mentionsPositions.push(text.length);
       }
       break;
     case "channel":
-      if (fanToken?.id) {
-        const channelDetails = await getChannelDetails(fanToken.id);
+      if (fanTokenInfo?.id) {
+        const channelDetails = await getChannelDetails(fanTokenInfo.id);
 
         if (channelDetails?.result?.channel?.url)
           parentUrl = channelDetails?.result?.channel?.url;
@@ -134,9 +139,7 @@ async function constructMessage(interpreted: InterpretedTx) {
       break;
   }
 
-  text += ` for ${formatNumber(
-    assetReceived.amount!
-  )} ${assetReceived.symbol!}`;
+  text += ` for ${formatNumber(moxieToken.amount!)} ${moxieToken.symbol!}`;
 
   if (spender !== beneficiary && beneficiaryInfo?.userId) {
     text += ` on behalf of `;
@@ -168,7 +171,7 @@ async function handleTransaction(txHash?: string) {
 
     const interpreted = transformEvent(decoded);
 
-    if (invalidTx(interpreted)) {
+    if (skipTx(interpreted)) {
       console.log("skipping transaction", txHash);
       return;
     }
@@ -182,7 +185,7 @@ async function handleTransaction(txHash?: string) {
 
     const etherscanUrl = `${ETHERSCAN_ENDPOINT}/tx/${txHash}`;
 
-    console.log(JSON.stringify(message, null, 2));
+    console.log(message);
 
     await publishToFarcaster({
       ...message,
@@ -236,6 +239,7 @@ async function main() {
   });
 
   console.log(`Server running on http://localhost:${server.port}`);
+
   await decoder.decodeTransaction({
     chainID: CHAIN_ID,
     hash: "0x6dd5ffecfe9d6e2d63fe5ed7b0f3b929dc3fcd4e9a00c8fa1064be65306a3f71",
