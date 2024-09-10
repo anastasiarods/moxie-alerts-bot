@@ -53,9 +53,21 @@ async function publishToFarcaster(cast: {
   console.log(`new cast hash: ${publishCastResponse.hash}`);
 }
 
-type NewType = InterpretedTx;
+function invalidTx(tx: InterpretedTx) {
+  return (
+    tx.type !== "swap" ||
+    tx.assetsSent.length !== 1 ||
+    tx.assetsReceived.length !== 1 ||
+    !tx.assetsSent[0].amount ||
+    !tx.assetsReceived[0].amount ||
+    !tx.assetsSent[0].symbol ||
+    !tx.assetsReceived[0].symbol ||
+    !tx.assetsSent[0].name ||
+    !tx.assetsReceived[0].name
+  );
+}
 
-async function constructMessage(interpreted: NewType) {
+async function constructMessage(interpreted: InterpretedTx) {
   const context = interpreted.context as {
     spender: string;
     beneficiary: string;
@@ -79,39 +91,35 @@ async function constructMessage(interpreted: NewType) {
       : [interpreted.assetsReceived[0], interpreted.assetsSent[0]];
 
   if (
-    !assetSent ||
-    !assetReceived ||
-    !assetSent.amount ||
-    !assetReceived.amount ||
-    !assetSent.symbol ||
-    !assetReceived.symbol ||
-    !assetSent.name ||
-    !assetReceived.name
+    !actorInfo?.userId ||
+    (spender !== beneficiary && !beneficiaryInfo?.userId)
   ) {
     return;
   }
 
-  let text = ` ${eventType} ${formatNumber(assetSent.amount)} shares of `;
+  let text = ` ${eventType} ${formatNumber(assetSent.amount!)} shares of `;
 
   let mentionsFids = [actorInfo?.userId];
   let mentionsPositions = [0];
 
-  const fanTokenType = getMoxieTokenTypeBySymbol(assetSent.symbol);
+  const fanTokenType = getMoxieTokenTypeBySymbol(assetSent.symbol!);
   const fanToken = getFanTokenDisplayNameAndId({
-    symbol: assetSent.symbol,
-    name: assetSent.name,
+    symbol: assetSent.symbol!,
+    name: assetSent.name!,
   });
 
-  if (fanTokenType === "user") {
+  if (fanTokenType === "user" && fanToken?.id) {
     mentionsFids.push(fanToken?.id);
     mentionsPositions.push(text.length);
   } else {
     text += `${fanToken?.name}`;
   }
 
-  text += ` for ${formatNumber(assetReceived.amount)} ${assetReceived.symbol}`;
+  text += ` for ${formatNumber(
+    assetReceived.amount!
+  )} ${assetReceived.symbol!}`;
 
-  if (spender !== beneficiary) {
+  if (spender !== beneficiary && beneficiaryInfo?.userId) {
     text += ` on behalf of `;
     mentionsFids.push(beneficiaryInfo?.userId);
     mentionsPositions.push(text.length);
@@ -139,11 +147,18 @@ async function handleTransaction(txHash?: string) {
     if (!decoded) return;
 
     const interpreted = transformEvent(decoded);
-    if (!interpreted || interpreted.type !== "swap") return;
+
+    if (invalidTx(interpreted)) {
+      console.log("skipping transaction", txHash);
+      return;
+    }
 
     const message = await constructMessage(interpreted);
 
-    if (!message) return;
+    if (!message) {
+      console.log("could not construct message");
+      return;
+    }
 
     const { text, mentionsFids, mentionsPositions } = message;
     const etherscanUrl = `${ETHERSCAN_ENDPOINT}/tx/${txHash}`;

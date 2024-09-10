@@ -29,10 +29,12 @@ export interface InterpretedTx {
   context?: {
     spender: string;
     beneficiary: string;
+    buyToken: string;
+    sellToken: string;
   };
   assetsSent: Asset[];
   assetsReceived: Asset[];
-};
+}
 
 export function transformEvent(event: DecodedTx): InterpretedTx {
   const methodName = event.methodCall.name;
@@ -63,6 +65,8 @@ export function transformEvent(event: DecodedTx): InterpretedTx {
     };
     const spender = params._spender;
     const beneficiary = params._beneficiary;
+    const sellToken = params._sellToken;
+    const buyToken = params._buyToken;
 
     if (eventType === "buy") {
       const sent = assetsSent(event.transfers, spender);
@@ -75,6 +79,8 @@ export function transformEvent(event: DecodedTx): InterpretedTx {
         context: {
           spender,
           beneficiary,
+          buyToken,
+          sellToken,
         },
         assetsSent: sent,
         assetsReceived: received,
@@ -92,6 +98,8 @@ export function transformEvent(event: DecodedTx): InterpretedTx {
         context: {
           spender,
           beneficiary,
+          buyToken,
+          sellToken,
         },
         assetsSent: sent,
         assetsReceived: received,
