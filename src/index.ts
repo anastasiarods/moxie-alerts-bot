@@ -14,6 +14,7 @@ import {
   getMoxieTokenTypeBySymbol,
 } from "./utils/moxie.js";
 import { formatNumber } from "./utils/format.js";
+import { getChannelDetails } from "./utils/fc.js";
 
 const signerPrivateKey = process.env.SIGNER_PRIVATE_KEY;
 const fid = process.env.ACCOUNT_FID;
@@ -28,18 +29,20 @@ const wsClient = createPublicClient({
 async function publishToFarcaster(cast: {
   text: string;
   url: string;
-  mentionsFids: number[];
+  mentions: number[];
   mentionsPositions: number[];
+  parentUrl?: string;
 }) {
   if (!signerPrivateKey || !fid) {
     throw new Error("No signer private key or account fid provided");
   }
-  const mentions = cast.mentionsFids;
+  const mentions = cast.mentions;
 
   const publishCastResponse = await client.submitCast(
     {
       text: cast.text,
-      mentions: mentions,
+      parentUrl: cast.parentUrl,
+      mentions,
       mentionsPositions: cast.mentionsPositions,
       embeds: [
         {
@@ -99,8 +102,9 @@ async function constructMessage(interpreted: InterpretedTx) {
 
   let text = ` ${eventType} ${formatNumber(assetSent.amount!)} shares of `;
 
-  let mentionsFids = [actorInfo?.userId];
+  let mentions = [actorInfo?.userId];
   let mentionsPositions = [0];
+  let parentUrl: string | undefined;
 
   const fanTokenType = getMoxieTokenTypeBySymbol(assetSent.symbol!);
   const fanToken = getFanTokenDisplayNameAndId({
@@ -108,11 +112,26 @@ async function constructMessage(interpreted: InterpretedTx) {
     name: assetSent.name!,
   });
 
-  if (fanTokenType === "user" && fanToken?.id) {
-    mentionsFids.push(fanToken?.id);
-    mentionsPositions.push(text.length);
-  } else {
-    text += `${fanToken?.name}`;
+  switch (fanTokenType) {
+    case "user":
+      if (fanToken?.id) {
+        mentions.push(fanToken.id);
+        mentionsPositions.push(text.length);
+      }
+      break;
+    case "channel":
+      if (fanToken?.id) {
+        const channelDetails = await getChannelDetails(fanToken.id);
+
+        if (channelDetails?.result?.channel?.url)
+          parentUrl = channelDetails?.result?.channel?.url;
+
+        text += `${fanToken.name}`;
+      }
+      break;
+    case "network":
+      text += `${fanToken?.name}`;
+      break;
   }
 
   text += ` for ${formatNumber(
@@ -121,14 +140,15 @@ async function constructMessage(interpreted: InterpretedTx) {
 
   if (spender !== beneficiary && beneficiaryInfo?.userId) {
     text += ` on behalf of `;
-    mentionsFids.push(beneficiaryInfo?.userId);
+    mentions.push(beneficiaryInfo?.userId);
     mentionsPositions.push(text.length);
   }
 
   return {
     text,
-    mentionsFids: mentionsFids.map((fid) => Number(fid)),
+    mentions: mentions.map((fid) => Number(fid)),
     mentionsPositions,
+    parentUrl,
   };
 }
 
@@ -160,16 +180,13 @@ async function handleTransaction(txHash?: string) {
       return;
     }
 
-    const { text, mentionsFids, mentionsPositions } = message;
     const etherscanUrl = `${ETHERSCAN_ENDPOINT}/tx/${txHash}`;
 
-    console.log(text, mentionsFids, mentionsPositions);
+    console.log(JSON.stringify(message, null, 2));
 
     await publishToFarcaster({
-      text,
+      ...message,
       url: etherscanUrl,
-      mentionsFids,
-      mentionsPositions,
     });
   } catch (e) {
     console.error(e);
@@ -199,15 +216,15 @@ async function createSubscription() {
   });
 
   const interval = setInterval(() => {
-    if (Date.now() - lastProcessedAt > 60_000 * 2) {
+    if (Date.now() - lastProcessedAt > 60_000 * 5) {
       console.error(
-        "No new transactions in the last 2 minutes, restarting subscription"
+        "No new transactions in the last 5 minutes, restarting subscription"
       );
       clearInterval(interval);
       response.unsubscribe();
       createSubscription();
     }
-  }, 60_000 * 2);
+  }, 60_000 * 5);
 }
 
 async function main() {
