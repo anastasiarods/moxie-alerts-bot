@@ -1,10 +1,10 @@
 import { decoder } from "./decoder/decoder.js";
-import { transformEvent } from "./decoder/interpreter.js";
+import { transformEvent, type InterpretedTx } from "./decoder/interpreter.js";
 import {
+  BUY_TOPIC,
   CHAIN_ID,
   ETHERSCAN_ENDPOINT,
   FARCASTER_HUB_URL,
-  TOPIC,
 } from "./constants.js";
 import { HubRestAPIClient } from "@standard-crypto/farcaster-js-hub-rest";
 import { createPublicClient, webSocket, type Hex } from "viem";
@@ -53,13 +53,15 @@ async function publishToFarcaster(cast: {
   console.log(`new cast hash: ${publishCastResponse.hash}`);
 }
 
-async function constructMessage(interpreted: any) {
+type NewType = InterpretedTx;
+
+async function constructMessage(interpreted: NewType) {
   const context = interpreted.context as {
     spender: string;
     beneficiary: string;
   };
 
-  const actor = interpreted.user.address.toLowerCase();
+  const actor = interpreted.user.toLowerCase();
   const spender = context.spender.toLowerCase();
   const beneficiary = context.beneficiary.toLowerCase();
 
@@ -76,13 +78,29 @@ async function constructMessage(interpreted: any) {
       ? [interpreted.assetsSent[0], interpreted.assetsReceived[0]]
       : [interpreted.assetsReceived[0], interpreted.assetsSent[0]];
 
+  if (
+    !assetSent ||
+    !assetReceived ||
+    !assetSent.amount ||
+    !assetReceived.amount ||
+    !assetSent.symbol ||
+    !assetReceived.symbol ||
+    !assetSent.name ||
+    !assetReceived.name
+  ) {
+    return;
+  }
+
   let text = ` ${eventType} ${formatNumber(assetSent.amount)} shares of `;
 
   let mentionsFids = [actorInfo?.userId];
   let mentionsPositions = [0];
 
-  const fanTokenType = getMoxieTokenTypeBySymbol(assetSent.asset.symbol);
-  const fanToken = getFanTokenDisplayNameAndId(assetSent.asset);
+  const fanTokenType = getMoxieTokenTypeBySymbol(assetSent.symbol);
+  const fanToken = getFanTokenDisplayNameAndId({
+    symbol: assetSent.symbol,
+    name: assetSent.name,
+  });
 
   if (fanTokenType === "user") {
     mentionsFids.push(fanToken?.id);
@@ -91,9 +109,7 @@ async function constructMessage(interpreted: any) {
     text += `${fanToken?.name}`;
   }
 
-  text += ` for ${formatNumber(assetReceived.amount)} ${
-    assetReceived.asset.symbol
-  }`;
+  text += ` for ${formatNumber(assetReceived.amount)} ${assetReceived.symbol}`;
 
   if (spender !== beneficiary) {
     text += ` on behalf of `;
@@ -124,12 +140,16 @@ async function handleTransaction(txHash?: string) {
 
     const interpreted = transformEvent(decoded);
     if (!interpreted || interpreted.type !== "swap") return;
-    const { text, mentionsFids, mentionsPositions } = await constructMessage(
-      interpreted
-    );
+
+    const message = await constructMessage(interpreted);
+
+    if (!message) return;
+
+    const { text, mentionsFids, mentionsPositions } = message;
     const etherscanUrl = `${ETHERSCAN_ENDPOINT}/tx/${txHash}`;
 
     console.log(text, mentionsFids, mentionsPositions);
+
     await publishToFarcaster({
       text,
       url: etherscanUrl,
@@ -141,24 +161,38 @@ async function handleTransaction(txHash?: string) {
   }
 }
 
+let lastProcessedAt = Date.now();
+
 async function createSubscription() {
-  await wsClient.transport.subscribe({
+  const response = await wsClient.transport.subscribe({
     method: "eth_subscribe",
     params: [
       //@ts-expect-error
       "logs",
       {
-        topics: [TOPIC],
+        topics: [BUY_TOPIC],
       },
     ],
     onData: (data: any) => {
       const txHash = data?.result?.transactionHash;
+      lastProcessedAt = Date.now();
       if (txHash) handleTransaction(txHash);
     },
     onError: (error: any) => {
       console.error(error);
     },
   });
+
+  const interval = setInterval(() => {
+    if (Date.now() - lastProcessedAt > 60_000 * 2) {
+      console.error(
+        "No new transactions in the last 2 minutes, restarting subscription"
+      );
+      clearInterval(interval);
+      response.unsubscribe();
+      createSubscription();
+    }
+  }, 60_000 * 2);
 }
 
 async function main() {
@@ -174,6 +208,8 @@ async function main() {
     chainID: CHAIN_ID,
     hash: "0x6dd5ffecfe9d6e2d63fe5ed7b0f3b929dc3fcd4e9a00c8fa1064be65306a3f71",
   });
+
+  console.log("Creating subscription");
 
   createSubscription();
 }

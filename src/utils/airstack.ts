@@ -46,5 +46,14 @@ export async function getFarcasterUserInfoByAddress(
   }
 
   const data = (await response.json()) as AirstackResponse;
-  return data.data.Socials.Social[0] || null;
+
+  const userInfo = data.data.Socials.Social;
+
+  if (!userInfo) {
+    return null;
+  }
+
+  return userInfo.filter(
+    (u) => u.profileName !== null && u.profileName !== ""
+  )[0] || null;
 }

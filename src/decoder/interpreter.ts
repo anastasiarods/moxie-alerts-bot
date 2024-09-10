@@ -1,58 +1,47 @@
 import type { DecodedTx, Asset } from "@3loop/transaction-decoder";
-import type { AssetTransfer } from "@3loop/transaction-interpreter";
 
-export function assetsSent(
-  transfers: Asset[],
-  address: string
-): AssetTransfer[] {
-  return transfers
-    .filter((t) => t.from.toLowerCase() === address.toLowerCase())
-    .map((t) => {
-      return {
-        from: { address: t.from, name: null },
-        to: { address: t.to, name: null },
-        amount: t.amount ?? "0",
-        asset: {
-          address: t.address,
-          name: t.name,
-          symbol: t.symbol,
-          type: t.type,
-          tokenId: t.tokenId,
-        },
-      };
-    });
+export function assetsSent(transfers: Asset[], address: string) {
+  return transfers.filter(
+    (t) =>
+      t.from.toLowerCase() === address.toLowerCase() &&
+      t.amount &&
+      t.amount !== "0"
+  );
 }
 
-export function assetsReceived(
-  transfers: Asset[],
-  address: string
-): AssetTransfer[] {
-  return transfers
-    .filter((t) => t.to.toLowerCase() === address.toLowerCase())
-    .map((t) => {
-      return {
-        from: { address: t.from, name: null },
-        to: { address: t.to, name: null },
-        amount: t.amount ?? "0",
-        asset: {
-          address: t.address,
-          name: t.name,
-          symbol: t.symbol,
-          type: t.type,
-          tokenId: t.tokenId,
-        },
-      };
-    });
+export function assetsReceived(transfers: Asset[], address: string) {
+  return transfers.filter(
+    (t) =>
+      t.to.toLowerCase() === address.toLowerCase() &&
+      t.amount &&
+      t.amount !== "0"
+  );
 }
 
-export function transformEvent(event: DecodedTx) {
+export interface InterpretedTx {
+  type: "swap" | "unknown";
+  action: string;
+  chain: number;
+  txHash: string;
+  to: string | null;
+  method: string | null;
+  user: string;
+  context?: {
+    spender: string;
+    beneficiary: string;
+  };
+  assetsSent: Asset[];
+  assetsReceived: Asset[];
+};
+
+export function transformEvent(event: DecodedTx): InterpretedTx {
   const methodName = event.methodCall.name;
   const baseEvent = {
     chain: event.chainID,
     txHash: event.txHash,
     to: event.toAddress,
     method: methodName,
-    user: { address: event.fromAddress, name: null },
+    user: event.fromAddress,
   };
 
   const purchaseOrSaleEvent = event.interactions.find(
@@ -81,7 +70,7 @@ export function transformEvent(event: DecodedTx) {
 
       return {
         type: "swap",
-        action: `Bought ${received[0].amount} ${received[0].asset.name} for ${sent[0].amount} ${sent[0].asset.name}`,
+        action: `Bought ${received[0].amount} ${received[0].name} for ${sent[0].amount} ${sent[0].name}`,
         ...baseEvent,
         context: {
           spender,
@@ -98,7 +87,7 @@ export function transformEvent(event: DecodedTx) {
 
       return {
         type: "swap",
-        action: `Sold ${sent[0].amount} ${sent[0].asset.name} for ${received[0].amount} ${received[0].asset.name}`,
+        action: `Sold ${sent[0].amount} ${sent[0].name} for ${received[0].amount} ${received[0].name}`,
         ...baseEvent,
         context: {
           spender,
