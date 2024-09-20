@@ -105,7 +105,7 @@ async function constructMessage(interpreted: InterpretedTx) {
     return;
   }
 
-  let text = ` ${eventType} ${formatNumber(fanToken.amount!)} shares of `;
+  let text = ` ${eventType} ${formatNumber(fanToken.amount!)} Fan Tokens of `;
 
   let mentions = [actorInfo?.userId];
   let mentionsPositions = [0];
