@@ -43,7 +43,7 @@ async function publishToFarcaster(cast: {
   const publishCastResponse = await client.submitCast(
     {
       text: cast.text,
-      parentUrl: cast.parentUrl,
+      // parentUrl: cast.parentUrl,
       mentions,
       mentionsPositions: cast.mentionsPositions,
       embeds: [
@@ -73,8 +73,6 @@ function skipTx(tx: InterpretedTx) {
   const fanTokenType = getMoxieTokenTypeBySymbol(fanToken.symbol!);
 
   if (fanTokenType === "network") return true;
-
-  if (fanTokenType === "channel") return true;
 
   return false;
 }
