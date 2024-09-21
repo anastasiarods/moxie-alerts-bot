@@ -5,6 +5,7 @@ import {
   CHAIN_ID,
   ETHERSCAN_ENDPOINT,
   FARCASTER_HUB_URL,
+  FRAME_ENDPOINT,
   RPC,
 } from "./constants.js";
 import { HubRestAPIClient } from "@standard-crypto/farcaster-js-hub-rest";
@@ -72,6 +73,8 @@ function skipTx(tx: InterpretedTx) {
   const fanTokenType = getMoxieTokenTypeBySymbol(fanToken.symbol!);
 
   if (fanTokenType === "network") return true;
+
+  if (fanTokenType === "channel") return true;
 
   return false;
 }
@@ -183,13 +186,12 @@ async function handleTransaction(txHash?: string) {
       return;
     }
 
-    const etherscanUrl = `${ETHERSCAN_ENDPOINT}/tx/${txHash}`;
-
+    const frameUrl = `${FRAME_ENDPOINT}/${CHAIN_ID}/${txHash}`;
     console.log(message);
 
     await publishToFarcaster({
       ...message,
-      url: etherscanUrl,
+      url: frameUrl,
     });
   } catch (e) {
     console.error(e);
