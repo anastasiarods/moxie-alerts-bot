@@ -1,9 +1,8 @@
 import { decoder } from "./decoder/decoder.js";
-import { transformEvent, type InterpretedTx } from "./decoder/interpreter.js";
+import { interpretTransaction } from "./decoder/interpreter.js";
 import {
   BUY_TOPIC,
   CHAIN_ID,
-  ETHERSCAN_ENDPOINT,
   FARCASTER_HUB_URL,
   FRAME_ENDPOINT,
   RPC,
@@ -17,6 +16,8 @@ import {
 } from "./utils/moxie.js";
 import { formatNumber } from "./utils/format.js";
 import { getChannelDetails } from "./utils/fc.js";
+import { Effect } from "effect";
+import { type InterpretedTransaction } from "@3loop/transaction-interpreter";
 
 const signerPrivateKey = process.env.SIGNER_PRIVATE_KEY;
 const fid = process.env.ACCOUNT_FID;
@@ -58,7 +59,7 @@ async function publishToFarcaster(cast: {
   console.log(`new cast hash: ${publishCastResponse.hash}`);
 }
 
-function skipTx(tx: InterpretedTx) {
+function skipTx(tx: InterpretedTransaction) {
   if (tx.type !== "swap") return true;
 
   if (tx.assetsSent.length !== 1 || tx.assetsReceived.length !== 1) return true;
@@ -67,25 +68,25 @@ function skipTx(tx: InterpretedTx) {
     ? [tx.assetsSent[0], tx.assetsReceived[0]]
     : [tx.assetsReceived[0], tx.assetsSent[0]];
 
-  if (moxieToken.symbol === "MOXIE" && Number(moxieToken.amount) < 1000)
+  if (moxieToken.asset.symbol === "MOXIE" && Number(moxieToken.amount) < 1000)
     return true;
 
-  const fanTokenType = getMoxieTokenTypeBySymbol(fanToken.symbol!);
+  const fanTokenType = getMoxieTokenTypeBySymbol(fanToken.asset.symbol!);
 
   if (fanTokenType === "network") return true;
 
   return false;
 }
 
-async function constructMessage(interpreted: InterpretedTx) {
-  const context = interpreted.context as {
-    spender: string;
-    beneficiary: string;
-  };
+async function constructMessage(interpreted: InterpretedTransaction) {
+  const spenderAddress = interpreted.assetsSent?.[0]?.from.address;
+  const beneficiaryAddress = interpreted.assetsReceived?.[0]?.to.address;
 
-  const actor = interpreted.user.toLowerCase();
-  const spender = context.spender.toLowerCase();
-  const beneficiary = context.beneficiary.toLowerCase();
+  if (!spenderAddress || !beneficiaryAddress) return;
+
+  const spender = spenderAddress.toLowerCase();
+  const beneficiary = beneficiaryAddress.toLowerCase();
+  const actor = interpreted.user.address.toLowerCase();
   const actorInfo = await getFarcasterUserInfoByAddress(actor);
 
   const beneficiaryInfo =
@@ -112,10 +113,10 @@ async function constructMessage(interpreted: InterpretedTx) {
   let mentionsPositions = [0];
   let parentUrl: string | undefined;
 
-  const fanTokenType = getMoxieTokenTypeBySymbol(fanToken.symbol!);
+  const fanTokenType = getMoxieTokenTypeBySymbol(fanToken.asset.symbol!);
   const fanTokenInfo = getFanTokenDisplayNameAndId({
-    symbol: fanToken.symbol!,
-    name: fanToken.name!,
+    symbol: fanToken.asset.symbol!,
+    name: fanToken.asset.name!,
   });
 
   switch (fanTokenType) {
@@ -127,20 +128,16 @@ async function constructMessage(interpreted: InterpretedTx) {
       break;
     case "channel":
       if (fanTokenInfo?.id) {
-        const channelDetails = await getChannelDetails(fanTokenInfo.id);
-
-        if (channelDetails?.result?.channel?.url)
-          parentUrl = channelDetails?.result?.channel?.url;
-
-        text += `${fanToken.name}`;
+        text += `${fanToken.asset.name}`;
       }
       break;
     case "network":
-      text += `${fanToken?.name}`;
+      text += `${fanToken.asset.name}`;
       break;
   }
 
-  text += ` for ${formatNumber(moxieToken.amount!)} ${moxieToken.symbol!}`;
+  text += ` for ${formatNumber(moxieToken.amount!)} ${moxieToken.asset
+    .symbol!}`;
 
   if (spender !== beneficiary && beneficiaryInfo?.userId) {
     text += ` on behalf of `;
@@ -170,7 +167,12 @@ async function handleTransaction(txHash?: string) {
 
     if (!decoded) return;
 
-    const interpreted = transformEvent(decoded);
+    const interpreted = await Effect.runPromise(
+      interpretTransaction({
+        ...decoded,
+        transfers: decoded.transfers.filter((t) => t.amount !== "0"),
+      })
+    );
 
     if (skipTx(interpreted)) {
       console.log("skipping transaction", txHash);
@@ -246,7 +248,6 @@ async function main() {
   });
 
   console.log("Creating subscription");
-
   createSubscription();
 }
 

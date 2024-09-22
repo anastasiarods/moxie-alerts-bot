@@ -2,6 +2,9 @@
   "name": "moxie-alerts-bot",
   "module": "src/index.ts",
   "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts"
+  },
   "devDependencies": {
     "@flydotio/dockerfile": "latest",
     "@types/bun": "latest"
@@ -10,9 +13,10 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@3loop/transaction-decoder": "^0.17.0",
-    "@3loop/transaction-interpreter": "^0.5.4",
+    "@3loop/transaction-decoder": "^0.18.0",
+    "@3loop/transaction-interpreter": "^0.7.0",
     "@standard-crypto/farcaster-js-hub-rest": "^1.4.1",
+    "effect": "^3.8.3",
     "viem": "^2.9.29"
   }
 }
