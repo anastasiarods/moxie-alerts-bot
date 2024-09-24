@@ -9,15 +9,12 @@ import {
 } from "./constants.js";
 import { HubRestAPIClient } from "@standard-crypto/farcaster-js-hub-rest";
 import { createPublicClient, webSocket, type Hex } from "viem";
-import { getFarcasterUserInfoByAddress } from "./utils/airstack.js";
 import {
-  getFanTokenDisplayNameAndId,
   getMoxieTokenTypeBySymbol,
 } from "./utils/moxie.js";
-import { formatNumber } from "./utils/format.js";
-import { getChannelDetails } from "./utils/fc.js";
 import { Effect } from "effect";
 import { type InterpretedTransaction } from "@3loop/transaction-interpreter";
+import { constructBurnMessage, constructBuyOrSellMessage } from "./utils/messages.js";
 
 const signerPrivateKey = process.env.SIGNER_PRIVATE_KEY;
 const fid = process.env.ACCOUNT_FID;
@@ -44,7 +41,6 @@ async function publishToFarcaster(cast: {
   const publishCastResponse = await client.submitCast(
     {
       text: cast.text,
-      // parentUrl: cast.parentUrl,
       mentions,
       mentionsPositions: cast.mentionsPositions,
       embeds: [
@@ -60,6 +56,8 @@ async function publishToFarcaster(cast: {
 }
 
 function skipTx(tx: InterpretedTransaction) {
+  if (tx.type === "burn") return false;
+
   if (tx.type !== "swap") return true;
 
   if (tx.assetsSent.length !== 1 || tx.assetsReceived.length !== 1) return true;
@@ -78,80 +76,6 @@ function skipTx(tx: InterpretedTransaction) {
   return false;
 }
 
-async function constructMessage(interpreted: InterpretedTransaction) {
-  const spenderAddress = interpreted.assetsSent?.[0]?.from.address;
-  const beneficiaryAddress = interpreted.assetsReceived?.[0]?.to.address;
-
-  if (!spenderAddress || !beneficiaryAddress) return;
-
-  const spender = spenderAddress.toLowerCase();
-  const beneficiary = beneficiaryAddress.toLowerCase();
-  const actor = interpreted.user.address.toLowerCase();
-  const actorInfo = await getFarcasterUserInfoByAddress(actor);
-
-  const beneficiaryInfo =
-    spender !== beneficiary
-      ? await getFarcasterUserInfoByAddress(beneficiary)
-      : null;
-
-  const eventType = interpreted.action.includes("Sold") ? "sold" : "bought";
-  const [fanToken, moxieToken] =
-    eventType === "sold"
-      ? [interpreted.assetsSent[0], interpreted.assetsReceived[0]]
-      : [interpreted.assetsReceived[0], interpreted.assetsSent[0]];
-
-  if (
-    !actorInfo?.userId ||
-    (spender !== beneficiary && !beneficiaryInfo?.userId)
-  ) {
-    return;
-  }
-
-  let text = ` ${eventType} ${formatNumber(fanToken.amount!)} Fan Tokens of `;
-
-  let mentions = [actorInfo?.userId];
-  let mentionsPositions = [0];
-  let parentUrl: string | undefined;
-
-  const fanTokenType = getMoxieTokenTypeBySymbol(fanToken.asset.symbol!);
-  const fanTokenInfo = getFanTokenDisplayNameAndId({
-    symbol: fanToken.asset.symbol!,
-    name: fanToken.asset.name!,
-  });
-
-  switch (fanTokenType) {
-    case "user":
-      if (fanTokenInfo?.id) {
-        mentions.push(fanTokenInfo.id);
-        mentionsPositions.push(text.length);
-      }
-      break;
-    case "channel":
-      if (fanTokenInfo?.id) {
-        text += `${fanToken.asset.name}`;
-      }
-      break;
-    case "network":
-      text += `${fanToken.asset.name}`;
-      break;
-  }
-
-  text += ` for ${formatNumber(moxieToken.amount!)} ${moxieToken.asset
-    .symbol!}`;
-
-  if (spender !== beneficiary && beneficiaryInfo?.userId) {
-    text += ` on behalf of `;
-    mentions.push(beneficiaryInfo?.userId);
-    mentionsPositions.push(text.length);
-  }
-
-  return {
-    text,
-    mentions: mentions.map((fid) => Number(fid)),
-    mentionsPositions,
-    parentUrl,
-  };
-}
 
 async function handleTransaction(txHash?: string) {
   try {
@@ -179,7 +103,12 @@ async function handleTransaction(txHash?: string) {
       return;
     }
 
-    const message = await constructMessage(interpreted);
+    let message;
+    if (interpreted.type === "burn") {
+      message = await constructBurnMessage(interpreted, decoded);
+    } else {
+      message = await constructBuyOrSellMessage(interpreted);
+    }
 
     if (!message) {
       console.log("could not construct message");

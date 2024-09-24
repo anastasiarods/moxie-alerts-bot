@@ -14,3 +14,8 @@ export const CHAIN_ID = 8453;
 export const ETHERSCAN_ENDPOINT = "https://basescan.org";
 export const FARCASTER_HUB_URL = "https://hub.farcaster.standardcrypto.vc:2281";
 export const FRAME_ENDPOINT = "https://decoder-frame.fly.dev/frame";
+
+//alert categories in moxie
+export const CATEGORIES = {
+  "WHALE": 100000
+}
