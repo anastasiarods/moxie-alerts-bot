@@ -9,16 +9,26 @@ import {
 } from "./constants.js";
 import { HubRestAPIClient } from "@standard-crypto/farcaster-js-hub-rest";
 import { createPublicClient, webSocket, type Hex } from "viem";
-import {
-  getMoxieTokenTypeBySymbol,
-} from "./utils/moxie.js";
+import { getMoxieTokenTypeBySymbol } from "./utils/moxie.js";
 import { Effect } from "effect";
 import { type InterpretedTransaction } from "@3loop/transaction-interpreter";
-import { constructBurnMessage, constructBuyOrSellMessage } from "./utils/messages.js";
+import {
+  constructBurnMessage,
+  constructBuyOrSellMessage,
+} from "./utils/messages.js";
+import axios from "axios";
 
 const signerPrivateKey = process.env.SIGNER_PRIVATE_KEY;
 const fid = process.env.ACCOUNT_FID;
+const axiosInstance = axios.create({
+  headers: {
+    "Content-Type": "application/json",
+    api_key: process.env.HUB_API_KEY,
+  },
+});
+
 const client = new HubRestAPIClient({
+  axiosInstance,
   hubUrl: FARCASTER_HUB_URL,
 });
 
@@ -75,7 +85,6 @@ function skipTx(tx: InterpretedTransaction) {
 
   return false;
 }
-
 
 async function handleTransaction(txHash?: string) {
   try {
