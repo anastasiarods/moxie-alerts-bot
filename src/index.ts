@@ -23,7 +23,7 @@ const fid = process.env.ACCOUNT_FID;
 const axiosInstance = axios.create({
   headers: {
     "Content-Type": "application/json",
-    api_key: process.env.HUB_API_KEY,
+    "x-airstack-hubs": process.env.HUB_API_KEY,
   },
 });
 
