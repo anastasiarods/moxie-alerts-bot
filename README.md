@@ -1,5 +1,11 @@
 # Farcaster bot for on-chain alerts
 
+Simple open-source bot that monitors on-chain events in real-time and posts decoded messages to Farcaster. Key features:
+
+- Needs only an RPC URL for real-time monitoring and transaction decoding
+- Uses Airstack API to get Farcaster user's data (this API is free if you have an Airstack Fan Token)
+- 0 dependencies on any external storage
+
 ### Step 0: Prerequisites
 
 - An installed Bun (see installation guide [here](https://bun.sh/docs/installation))
