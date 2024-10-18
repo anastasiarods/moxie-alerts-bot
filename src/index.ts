@@ -70,16 +70,20 @@ function skipTx(tx: InterpretedTransaction) {
 
   if (tx.type !== "swap") return true;
 
-  if (tx.assetsSent.length !== 1 || tx.assetsReceived.length !== 1) return true;
-
-  const [fanToken, moxieToken] = tx.action.includes("Sold")
-    ? [tx.assetsSent[0], tx.assetsReceived[0]]
-    : [tx.assetsReceived[0], tx.assetsSent[0]];
-
-  if (moxieToken.asset.symbol === "MOXIE" && Number(moxieToken.amount) < 1000)
+  if (
+    (tx.assetsSent.length !== 1 || tx.assetsMinted?.length !== 1) &&
+    (tx.assetsReceived.length !== 1 || tx.assetsBurned?.length !== 1)
+  )
     return true;
 
-  const fanTokenType = getMoxieTokenTypeBySymbol(fanToken.asset.symbol!);
+  const [moxieToken, fanToken] = tx.action.includes("Sold")
+    ? [tx.assetsReceived[0], tx?.assetsBurned?.[0]]
+    : [tx.assetsSent[0], tx?.assetsMinted?.[0]];
+
+  if (moxieToken?.asset.symbol === "MOXIE" && Number(moxieToken.amount) < 1000)
+    return true;
+
+  const fanTokenType = getMoxieTokenTypeBySymbol(fanToken?.asset.symbol!);
 
   if (fanTokenType === "network") return true;
 

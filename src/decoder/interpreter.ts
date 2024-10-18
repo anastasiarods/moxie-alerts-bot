@@ -1,4 +1,4 @@
-import type { DecodedTx } from "@3loop/transaction-decoder"
+import type { DecodedTransaction } from "@3loop/transaction-decoder"
 import {
   QuickjsConfig,
   QuickjsInterpreterLive,
@@ -13,17 +13,17 @@ const config = Layer.succeed(QuickjsConfig, {
 
 export const InterpreterLive = Layer.provide(QuickjsInterpreterLive, config)
 
-export const interpretTransaction = (decodedTx: DecodedTx) =>
+export const interpretTransaction = (DecodedTransaction: DecodedTransaction) =>
   Effect.gen(function* () {
     const interpreterService = yield* TransactionInterpreter
 
-    let interpreter = interpreterService.findInterpreter(decodedTx)
+    let interpreter = interpreterService.findInterpreter(DecodedTransaction)
 
     if (interpreter == null) {
       interpreter = { id: "fallback", schema: fallbackInterpreter }
     }
 
-    const result = yield* interpreterService.interpretTx(decodedTx, interpreter)
+    const result = yield* interpreterService.interpretTx(DecodedTransaction, interpreter)
 
     return result
   }).pipe(Effect.provide(InterpreterLive), Effect.scoped)

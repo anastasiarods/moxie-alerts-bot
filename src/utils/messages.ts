@@ -5,24 +5,37 @@ import {
 } from "./moxie.js";
 import { formatNumber } from "./format.js";
 import { type InterpretedTransaction } from "@3loop/transaction-interpreter";
-import type { DecodedTx } from "@3loop/transaction-decoder";
+import type { DecodedTransaction } from "@3loop/transaction-decoder";
 import { getFarcasterUserInfoByAddress } from "./airstack";
 
 function getTextLengthInBytes(text: string) {
-    const encoder = new TextEncoder();
-    const bytes = encoder.encode(text);
-    return bytes.length;
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(text);
+  return bytes.length;
 }
 
-  
 export async function constructBuyOrSellMessage(tx: InterpretedTransaction) {
-  const spenderAddress = tx.assetsSent?.[0]?.from.address;
-  const beneficiaryAddress = tx.assetsReceived?.[0]?.to.address;
+  const eventType = tx.action.includes("Sold") ? "sold" : "bought";
+  const [moxieToken, fanToken] =
+    eventType === "sold"
+      ? [tx.assetsReceived[0], tx?.assetsBurned?.[0]]
+      : [tx.assetsSent[0], tx?.assetsMinted?.[0]];
 
-  if (!spenderAddress || !beneficiaryAddress) return;
+  const [spenderToken, receiverToken] =
+    eventType === "sold" ? [fanToken, moxieToken] : [moxieToken, fanToken];
 
-  const spender = spenderAddress.toLowerCase();
-  const beneficiary = beneficiaryAddress.toLowerCase();
+  if (
+    !moxieToken ||
+    !fanToken ||
+    !spenderToken?.from.address ||
+    !receiverToken?.to.address
+  ) {
+    console.log("no spender or receiver", spenderToken, receiverToken);
+    return;
+  }
+
+  const spender = spenderToken.from.address.toLowerCase();
+  const beneficiary = receiverToken.to.address.toLowerCase();
   const actor = tx.user.address.toLowerCase();
   const actorInfo = await getFarcasterUserInfoByAddress(actor);
 
@@ -31,16 +44,11 @@ export async function constructBuyOrSellMessage(tx: InterpretedTransaction) {
       ? await getFarcasterUserInfoByAddress(beneficiary)
       : null;
 
-  const eventType = tx.action.includes("Sold") ? "sold" : "bought";
-  const [fanToken, moxieToken] =
-    eventType === "sold"
-      ? [tx.assetsSent[0], tx.assetsReceived[0]]
-      : [tx.assetsReceived[0], tx.assetsSent[0]];
-
   if (
     !actorInfo?.userId ||
     (spender !== beneficiary && !beneficiaryInfo?.userId)
   ) {
+    console.log("no actor or beneficiary info", actor, beneficiary);
     return;
   }
 
@@ -98,12 +106,15 @@ export async function constructBuyOrSellMessage(tx: InterpretedTransaction) {
 
 export async function constructBurnMessage(
   interpreted: InterpretedTransaction,
-  decoded: DecodedTx
+  decoded: DecodedTransaction
 ) {
   const actor = interpreted.user.address.toLowerCase();
   const actorInfo = await getFarcasterUserInfoByAddress(actor);
 
-  if (!actorInfo?.userId) return;
+  if (!actorInfo?.userId) {
+    console.log("no actor info", actor);
+    return;
+  }
 
   let text = `🔥 `;
   let mentions = [];
@@ -115,12 +126,11 @@ export async function constructBurnMessage(
     interpreted.assetsSent[0].asset.symbol
   }`;
 
-
   const fanToken = Object.values(decoded.addressesMeta).find(
     (meta) => meta.tokenSymbol !== "MOXIE"
   );
 
-  if (fanToken) {
+  if (fanToken && fanToken.tokenSymbol && fanToken.contractName) {
     const fanTokenType = getMoxieTokenTypeBySymbol(fanToken.tokenSymbol);
     const fanTokenInfo = getFanTokenDisplayNameAndId({
       symbol: fanToken.tokenSymbol,
