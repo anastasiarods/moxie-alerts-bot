@@ -71,7 +71,6 @@ export async function getFarcasterUserInfoByAddress(
   // Check cache first
   const cachedResult = handleCache(cacheKey, "get");
 
-  console.log("cachedResult", cachedResult);
   if (cachedResult !== undefined) {
     return cachedResult;
   }
