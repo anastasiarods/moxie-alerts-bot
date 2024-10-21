@@ -151,3 +151,56 @@ export async function constructBurnMessage(
     mentionsPositions,
   };
 }
+
+export async function constructStakeMessage(
+  interpreted: InterpretedTransaction
+) {
+  console.log(JSON.stringify(interpreted, null, 2));
+
+  const actor = interpreted.user.address.toLowerCase();
+  const actorInfo = await getFarcasterUserInfoByAddress(actor);
+  const method = interpreted.method;
+
+  if (!actorInfo?.userId) {
+    console.log("no actor info", actor);
+    return;
+  }
+
+  let text = ``;
+  let mentions = [];
+  let mentionsPositions = [];
+  mentions.push(actorInfo.userId);
+  mentionsPositions.push(getTextLengthInBytes(text));
+
+  const fanToken =
+    method === "depositAndLock"
+      ? interpreted.assetsSent[0]
+      : interpreted.assetsMinted?.[0];
+
+  if (fanToken && fanToken.asset.symbol && fanToken.asset.name) {
+    const fanTokenType = getMoxieTokenTypeBySymbol(fanToken.asset.symbol);
+    const fanTokenInfo = getFanTokenDisplayNameAndId({
+      symbol: fanToken.asset.symbol,
+      name: fanToken.asset.name,
+    });
+
+    if (fanTokenType === "user" && fanTokenInfo?.id) {
+      text +=
+        " " +
+        interpreted.action.substring(0, interpreted.action.indexOf(" of") + 3) +
+        " ";
+      mentions.push(fanTokenInfo.id);
+      mentionsPositions.push(getTextLengthInBytes(text));
+    }
+
+    if (fanTokenType === "channel" && fanTokenInfo?.id) {
+      text += " " + interpreted.action + " ";
+    }
+  }
+
+  return {
+    text,
+    mentions: mentions.map((fid) => Number(fid)),
+    mentionsPositions,
+  };
+}

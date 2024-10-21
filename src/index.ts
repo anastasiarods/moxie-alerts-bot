@@ -15,6 +15,7 @@ import { type InterpretedTransaction } from "@3loop/transaction-interpreter";
 import {
   constructBurnMessage,
   constructBuyOrSellMessage,
+  constructStakeMessage,
 } from "./utils/messages.js";
 import axios from "axios";
 
@@ -66,7 +67,7 @@ async function publishToFarcaster(cast: {
 }
 
 function skipTx(tx: InterpretedTransaction) {
-  if (tx.type === "burn") return false;
+  if (tx.type === "burn" || tx.type === "stake-token") return false;
 
   if (tx.type !== "swap") return true;
 
@@ -119,6 +120,8 @@ async function handleTransaction(txHash?: string) {
     let message;
     if (interpreted.type === "burn") {
       message = await constructBurnMessage(interpreted, decoded);
+    } else if (interpreted.type === "stake-token") {
+      message = await constructStakeMessage(interpreted);
     } else {
       message = await constructBuyOrSellMessage(interpreted);
     }

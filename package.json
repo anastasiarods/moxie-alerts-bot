@@ -13,8 +13,8 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@3loop/transaction-decoder": "^0.19.0",
-    "@3loop/transaction-interpreter": "^0.10.1",
+    "@3loop/transaction-decoder": "^0.19.1",
+    "@3loop/transaction-interpreter": "^0.10.2",
     "@standard-crypto/farcaster-js-hub-rest": "^1.4.1",
     "effect": "^3.8.3",
     "viem": "^2.9.29"
