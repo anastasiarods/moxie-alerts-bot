@@ -28,6 +28,8 @@ const axiosInstance = axios.create({
   },
 });
 
+const isDev = process.env.STAGE === "dev";
+
 const client = new HubRestAPIClient({
   axiosInstance,
   hubUrl: FARCASTER_HUB_URL,
@@ -133,6 +135,11 @@ async function handleTransaction(txHash?: string) {
 
     const frameUrl = `${FRAME_ENDPOINT}/${CHAIN_ID}/${txHash}`;
     console.log(message);
+
+    if (isDev) {
+      console.log("skipping publish in dev mode");
+      return;
+    }
 
     await publishToFarcaster({
       ...message,

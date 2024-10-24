@@ -1,9 +1,5 @@
 import { CATEGORIES } from "../constants.js";
-import {
-  getFanTokenDisplayNameAndId,
-  getMoxieTokenTypeBySymbol,
-} from "./moxie.js";
-import { formatNumber } from "./format.js";
+import { getFanTokenDetails } from "./moxie.js";
 import { type InterpretedTransaction } from "@3loop/transaction-interpreter";
 import type { DecodedTransaction } from "@3loop/transaction-decoder";
 import { getFarcasterUserInfoByAddress } from "./airstack";
@@ -14,41 +10,54 @@ function getTextLengthInBytes(text: string) {
   return bytes.length;
 }
 
-export async function constructBuyOrSellMessage(tx: InterpretedTransaction) {
-  const eventType = tx.action.includes("Sold") ? "sold" : "bought";
-  const [moxieToken, fanToken] =
-    eventType === "sold"
-      ? [tx.assetsReceived[0], tx?.assetsBurned?.[0]]
-      : [tx.assetsSent[0], tx?.assetsMinted?.[0]];
+function splitActionText(text: string) {
+  const cleanedText = text.replace(/of [^ ]+ (?=for)/, "of ");
+  const parts = cleanedText.split(" for ");
+  parts[1] = "for " + parts[1];
+  return parts;
+}
 
-  const [spenderToken, receiverToken] =
-    eventType === "sold" ? [fanToken, moxieToken] : [moxieToken, fanToken];
+export async function constructBuyOrSellMessage(tx: InterpretedTransaction) {
+  const isSellingEvent = tx.action.includes("Sold");
+  const [moxieToken, fanToken] = isSellingEvent
+    ? [tx.assetsReceived[0], tx?.assetsBurned?.[0]]
+    : [tx.assetsSent[0], tx?.assetsMinted?.[0]];
+  const [spenderToken, receiverToken] = isSellingEvent
+    ? [fanToken, moxieToken]
+    : [moxieToken, fanToken];
 
   if (
-    !moxieToken ||
-    !fanToken ||
     !spenderToken?.from.address ||
-    !receiverToken?.to.address
+    !receiverToken?.to.address ||
+    !fanToken ||
+    !moxieToken
   ) {
     console.log("no spender or receiver", spenderToken, receiverToken);
     return;
   }
 
-  const spender = spenderToken.from.address.toLowerCase();
-  const beneficiary = receiverToken.to.address.toLowerCase();
-  const actor = tx.user.address.toLowerCase();
-  const actorInfo = await getFarcasterUserInfoByAddress(actor);
+  const addresses = {
+    spender: spenderToken.from.address.toLowerCase(),
+    beneficiary: receiverToken.to.address.toLowerCase(),
+    actor: tx.user.address.toLowerCase(),
+  };
 
-  const beneficiaryInfo =
-    spender !== beneficiary
-      ? await getFarcasterUserInfoByAddress(beneficiary)
-      : null;
+  const [actorInfo, beneficiaryInfo] = await Promise.all([
+    getFarcasterUserInfoByAddress(addresses.actor),
+    addresses.spender !== addresses.beneficiary
+      ? getFarcasterUserInfoByAddress(addresses.beneficiary)
+      : Promise.resolve(null),
+  ]);
 
   if (
     !actorInfo?.userId ||
-    (spender !== beneficiary && !beneficiaryInfo?.userId)
+    (addresses.spender !== addresses.beneficiary && !beneficiaryInfo?.userId)
   ) {
-    console.log("no actor or beneficiary info", actor, beneficiary);
+    console.log(
+      "no actor or beneficiary info",
+      addresses.actor,
+      addresses.beneficiary
+    );
     return;
   }
 
@@ -60,25 +69,25 @@ export async function constructBuyOrSellMessage(tx: InterpretedTransaction) {
 
   let mentionsPositions = [getTextLengthInBytes(text)];
   let mentions = [actorInfo?.userId];
-  text += ` ${eventType} ${formatNumber(fanToken.amount!)} Fan Tokens of `;
+  const actionParts = splitActionText(tx.action);
+  text += ` ${actionParts[0]} `;
 
   let parentUrl: string | undefined;
 
-  const fanTokenType = getMoxieTokenTypeBySymbol(fanToken.asset.symbol!);
-  const fanTokenInfo = getFanTokenDisplayNameAndId({
+  const fanTokenDetails = getFanTokenDetails({
     symbol: fanToken.asset.symbol!,
     name: fanToken.asset.name!,
   });
 
-  switch (fanTokenType) {
+  switch (fanTokenDetails?.type) {
     case "user":
-      if (fanTokenInfo?.id) {
-        mentions.push(fanTokenInfo.id);
+      if (fanTokenDetails.id) {
+        mentions.push(fanTokenDetails.id);
         mentionsPositions.push(getTextLengthInBytes(text));
       }
       break;
     case "channel":
-      if (fanTokenInfo?.id) {
+      if (fanTokenDetails.id) {
         text += `${fanToken.asset.name}`;
       }
       break;
@@ -87,10 +96,9 @@ export async function constructBuyOrSellMessage(tx: InterpretedTransaction) {
       break;
   }
 
-  text += ` for ${formatNumber(moxieToken.amount!)} ${moxieToken.asset
-    .symbol!}`;
+  text += ` ${actionParts[1]}`;
 
-  if (spender !== beneficiary && beneficiaryInfo?.userId) {
+  if (addresses.spender !== addresses.beneficiary && beneficiaryInfo?.userId) {
     text += ` on behalf of `;
     mentions.push(beneficiaryInfo?.userId);
     mentionsPositions.push(getTextLengthInBytes(text));
@@ -119,27 +127,28 @@ export async function constructBurnMessage(
   let text = `🔥 `;
   let mentions = [];
   let mentionsPositions = [];
+  const actionParts = interpreted.action.split(" for ");
 
   mentions.push(actorInfo.userId);
   mentionsPositions.push(getTextLengthInBytes(text));
-  text += ` burned ${formatNumber(interpreted.assetsSent[0].amount!)} ${
-    interpreted.assetsSent[0].asset.symbol
-  }`;
+  text += ` ${actionParts[0]}`;
 
   const fanToken = Object.values(decoded.addressesMeta).find(
-    (meta) => meta.tokenSymbol !== "MOXIE"
+    (meta) =>
+      meta?.tokenSymbol?.startsWith("fid:") ||
+      meta?.tokenSymbol?.startsWith("cid:") ||
+      meta?.tokenSymbol?.startsWith("id:")
   );
 
-  if (fanToken && fanToken.tokenSymbol && fanToken.contractName) {
-    const fanTokenType = getMoxieTokenTypeBySymbol(fanToken.tokenSymbol);
-    const fanTokenInfo = getFanTokenDisplayNameAndId({
-      symbol: fanToken.tokenSymbol,
-      name: fanToken.contractName,
+  if (fanToken) {
+    const fanTokenDetails = getFanTokenDetails({
+      symbol: fanToken.tokenSymbol ?? "",
+      name: fanToken.contractName ?? "",
     });
 
-    if (fanTokenType === "user" && fanTokenInfo?.id) {
+    if (fanTokenDetails?.type === "user" && fanTokenDetails.id) {
       text += ` for `;
-      mentions.push(fanTokenInfo.id);
+      mentions.push(fanTokenDetails.id);
       mentionsPositions.push(getTextLengthInBytes(text));
       text += ` Fan Token hodlers`;
     }
@@ -163,38 +172,40 @@ export async function constructStakeMessage(
     return;
   }
 
-  const fanToken = interpreted.method === "depositAndLock"
-    ? interpreted.assetsSent[0]
-    : interpreted.assetsMinted?.[0];
+  const fanToken =
+    interpreted.method === "depositAndLock"
+      ? interpreted.assetsSent[0]
+      : interpreted.assetsMinted?.[0];
 
   if (!fanToken || !fanToken.asset.symbol || !fanToken.asset.name) {
     console.log("Invalid fan token data");
     return;
   }
 
-  const fanTokenType = getMoxieTokenTypeBySymbol(fanToken.asset.symbol);
-  const fanTokenInfo = getFanTokenDisplayNameAndId({
+  const fanTokenDetails = getFanTokenDetails({
     symbol: fanToken.asset.symbol,
     name: fanToken.asset.name,
   });
 
-  let text = '';
+  let text = "";
   const mentions = [actorInfo.userId];
   const mentionsPositions = [0];
 
-  if (fanTokenType === "user" && fanTokenInfo?.id) {
+  if (fanTokenDetails?.type === "user" && fanTokenDetails.id) {
     const actionParts = interpreted.action.split(" of ");
     text = ` ${actionParts[0]} of `;
-    mentions.push(fanTokenInfo.id);
+    mentions.push(fanTokenDetails.id);
     mentionsPositions.push(getTextLengthInBytes(text));
     text += ` for${actionParts[1].split(" for")[1]}`;
-  } else if (fanTokenType === "channel" && fanTokenInfo?.id) {
+  } else if (fanTokenDetails?.type === "channel" && fanTokenDetails.id) {
     text = ` ${interpreted.action} `;
   }
 
-  return text ? {
-    text,
-    mentions: mentions.map(Number),
-    mentionsPositions,
-  } : undefined;
+  return text
+    ? {
+        text,
+        mentions: mentions.map(Number),
+        mentionsPositions,
+      }
+    : undefined;
 }

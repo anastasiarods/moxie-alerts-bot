@@ -14,7 +14,7 @@ export function getMoxieTokenTypeBySymbol(symbol: string) {
   return null;
 }
 
-export function getFanTokenDisplayNameAndId({
+export function getFanTokenDetails({
   symbol,
   name,
 }: {
@@ -24,14 +24,14 @@ export function getFanTokenDisplayNameAndId({
   const assetType = getMoxieTokenTypeBySymbol(symbol);
 
   if (assetType === "user") {
-    return { name: name, id: symbol.split(":")[1] };
+    return { name: name, id: symbol.split(":")[1], type: assetType };
   }
 
   if (assetType === "channel") {
-    return { name: name, id: symbol.split(":")[1] };
+    return { name: name, id: symbol.split(":")[1], type: assetType };
   }
 
   if (assetType === "network") {
-    return { name: "Farcaster Network", id: undefined };
+    return { name: "Farcaster Network", id: undefined, type: assetType };
   }
 }
