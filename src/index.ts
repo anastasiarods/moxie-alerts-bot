@@ -5,6 +5,7 @@ import {
   CHAIN_ID,
   FARCASTER_HUB_URL,
   FRAME_ENDPOINT,
+  FRAME_V2_ENDPOINT,
   RPC,
 } from "./constants.js";
 import { HubRestAPIClient } from "@standard-crypto/farcaster-js-hub-rest";
@@ -18,7 +19,6 @@ import {
   constructStakeMessage,
 } from "./utils/messages.js";
 import axios from "axios";
-
 const signerPrivateKey = process.env.SIGNER_PRIVATE_KEY;
 const fid = process.env.ACCOUNT_FID;
 const axiosInstance = axios.create({
@@ -133,7 +133,24 @@ async function handleTransaction(txHash?: string) {
       return;
     }
 
-    const frameUrl = `${FRAME_ENDPOINT}/${CHAIN_ID}/${txHash}`;
+    let frameUrl = `${FRAME_ENDPOINT}/${CHAIN_ID}/${txHash}`;
+
+    if (interpreted.type === "swap") {
+      const trade = await fetch(`${FRAME_V2_ENDPOINT}/generate-trade`, {
+        method: "POST",
+        body: JSON.stringify({
+          hash: txHash,
+          feeTaker: "0x0000000000000000000000000000000000000000",
+          chainId: CHAIN_ID,
+        }),
+      });
+
+      const tradeData = (await trade.json()) as { id?: string };
+      if (tradeData.id) {
+        frameUrl = `${FRAME_V2_ENDPOINT}/frame/v2?tradeId=${tradeData.id}`;
+      }
+    }
+
     console.log(message);
 
     if (isDev) {

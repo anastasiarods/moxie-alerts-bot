@@ -16,6 +16,7 @@ export const CHAIN_ID = 8453;
 export const ETHERSCAN_ENDPOINT = "https://basescan.org";
 export const FARCASTER_HUB_URL = process.env.FC_HUB_URL || "";
 export const FRAME_ENDPOINT = "https://decoder-frame.fly.dev/frame";
+export const FRAME_V2_ENDPOINT = "https://reach.3loop.io";
 
 //alert categories in moxie
 export const CATEGORIES = {
