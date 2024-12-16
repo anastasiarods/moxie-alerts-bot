@@ -20,8 +20,8 @@ function splitActionText(text: string) {
 export async function constructBuyOrSellMessage(tx: InterpretedTransaction) {
   const isSellingEvent = tx.action.includes("Sold");
   const [moxieToken, fanToken] = isSellingEvent
-    ? [tx.assetsReceived[0], tx?.assetsBurned?.[0]]
-    : [tx.assetsSent[0], tx?.assetsMinted?.[0]];
+    ? [tx.assetsReceived[0], tx?.assetsSent?.[0]]
+    : [tx.assetsSent[0], tx?.assetsReceived?.[0]];
   const [spenderToken, receiverToken] = isSellingEvent
     ? [fanToken, moxieToken]
     : [moxieToken, fanToken];

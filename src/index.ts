@@ -74,14 +74,14 @@ function skipTx(tx: InterpretedTransaction) {
   if (tx.type !== "swap") return true;
 
   if (
-    (tx.assetsSent.length !== 1 || tx.assetsMinted?.length !== 1) &&
-    (tx.assetsReceived.length !== 1 || tx.assetsBurned?.length !== 1)
+    (tx.assetsSent.length !== 1 || tx.assetsReceived?.length !== 1) &&
+    (tx.assetsReceived.length !== 1 || tx.assetsSent?.length !== 1)
   )
     return true;
 
   const [moxieToken, fanToken] = tx.action.includes("Sold")
-    ? [tx.assetsReceived[0], tx?.assetsBurned?.[0]]
-    : [tx.assetsSent[0], tx?.assetsMinted?.[0]];
+    ? [tx.assetsReceived[0], tx?.assetsSent?.[0]]
+    : [tx.assetsSent[0], tx?.assetsReceived?.[0]];
 
   if (moxieToken?.asset.symbol === "MOXIE" && Number(moxieToken.amount) < 1000)
     return true;
@@ -136,18 +136,24 @@ async function handleTransaction(txHash?: string) {
     let frameUrl = `${FRAME_ENDPOINT}/${CHAIN_ID}/${txHash}`;
 
     if (interpreted.type === "swap") {
-      const trade = await fetch(`${FRAME_V2_ENDPOINT}/generate-trade`, {
-        method: "POST",
-        body: JSON.stringify({
-          hash: txHash,
-          feeTaker: "0x0000000000000000000000000000000000000000",
-          chainId: CHAIN_ID,
-        }),
-      });
+      try {
+        const trade = await fetch(`${FRAME_V2_ENDPOINT}/generate-trade`, {
+          method: "POST",
+          body: JSON.stringify({
+            hash: txHash,
+            feeTaker: "0x0000000000000000000000000000000000000000",
+            chainId: CHAIN_ID,
+          }),
+        });
 
-      const tradeData = (await trade.json()) as { id?: string };
-      if (tradeData.id) {
-        frameUrl = `${FRAME_V2_ENDPOINT}/frame/v2?tradeId=${tradeData.id}`;
+        if (trade.ok) {
+          const tradeData = (await trade.json()) as { id?: string };
+          if (tradeData.id) {
+            frameUrl = `${FRAME_V2_ENDPOINT}/frame/v2?tradeId=${tradeData.id}`;
+          }
+        }
+      } catch (error) {
+        console.error(error);
       }
     }
 
