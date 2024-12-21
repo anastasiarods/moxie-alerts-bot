@@ -135,13 +135,13 @@ async function handleTransaction(txHash?: string) {
 
     let frameUrl = `${FRAME_ENDPOINT}/${CHAIN_ID}/${txHash}`;
 
-    if (interpreted.type === "swap") {
+    if (interpreted.type === "swap" || interpreted.type === "stake-token") {
       try {
         const trade = await fetch(`${FRAME_V2_ENDPOINT}/generate-trade`, {
           method: "POST",
           body: JSON.stringify({
             hash: txHash,
-            feeTaker: "0x0000000000000000000000000000000000000000",
+            feeTaker: interpreted.user.address.toLowerCase(),
             chainId: CHAIN_ID,
           }),
         });
