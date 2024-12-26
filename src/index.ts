@@ -219,15 +219,11 @@ async function main() {
 
   await decoder.decodeTransaction({
     chainID: CHAIN_ID,
-    hash: "0x251a09a4c0e23cda7645e2991b751fb9ff8580b942e40279e7231aa5b288bbf5",
+    hash: "0x6dd5ffecfe9d6e2d63fe5ed7b0f3b929dc3fcd4e9a00c8fa1064be65306a3f71",
   });
 
-  await handleTransaction(
-    "0xf966d707fa1482168efbe59a45e61981d51c880a1b5976cce925137c265c6b25"
-  );
-
-  // console.log("Creating subscription");
-  // createSubscription();
+  console.log("Creating subscription");
+  createSubscription();
 }
 
 // Call the main function to start the server
