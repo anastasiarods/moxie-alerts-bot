@@ -20,5 +20,5 @@ export const FRAME_V2_ENDPOINT = "https://reach.3loop.io";
 
 //alert categories in moxie
 export const CATEGORIES = {
-  WHALE: 100000,
+  WHALE: 200000,
 };

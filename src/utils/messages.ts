@@ -11,7 +11,7 @@ function getTextLengthInBytes(text: string) {
 }
 
 function splitActionText(text: string) {
-  const cleanedText = text.replace(/of [^ ]+ (?=for)/, "of ");
+  const cleanedText = text.replace(/of .+? (?=for)/, "of ");
   const parts = cleanedText.split(" for ");
   parts[1] = "for " + parts[1];
   return parts;
@@ -70,6 +70,8 @@ export async function constructBuyOrSellMessage(tx: InterpretedTransaction) {
   let mentionsPositions = [getTextLengthInBytes(text)];
   let mentions = [actorInfo?.userId];
   const actionParts = splitActionText(tx.action);
+
+  console.log("actionParts", actionParts);
   text += ` ${actionParts[0]} `;
 
   let parentUrl: string | undefined;
@@ -78,6 +80,8 @@ export async function constructBuyOrSellMessage(tx: InterpretedTransaction) {
     symbol: fanToken.asset.symbol!,
     name: fanToken.asset.name!,
   });
+
+  console.log("fanTokenDetails", fanToken);
 
   switch (fanTokenDetails?.type) {
     case "user":
@@ -92,7 +96,11 @@ export async function constructBuyOrSellMessage(tx: InterpretedTransaction) {
       }
       break;
     case "network":
+    case "base-economy":
       text += `${fanToken.asset.name}`;
+      break;
+    case "moxie":
+      text += `${fanTokenDetails.name}`;
       break;
   }
 
@@ -197,7 +205,10 @@ export async function constructStakeMessage(
     mentions.push(fanTokenDetails.id);
     mentionsPositions.push(getTextLengthInBytes(text));
     text += ` for${actionParts[1].split(" for")[1]}`;
-  } else if (fanTokenDetails?.type === "channel" && fanTokenDetails.id) {
+  } else if (
+    fanTokenDetails?.type === "channel" ||
+    fanTokenDetails?.type === "moxie"
+  ) {
     text = ` ${interpreted.action} `;
   }
 
