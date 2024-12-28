@@ -46,7 +46,7 @@ export function getFanTokenDetails({
   if (assetType === "moxie") {
     return {
       id: undefined,
-      name: symbol.split(":")[1].replace("-x", "").replace("-fc", ""),
+      name: symbol.split(":")[1].replace("-x", "").replace("-fc", "").replace("-base", ""),
       type: assetType,
     };
   }
