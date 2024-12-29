@@ -3,12 +3,10 @@ import { interpretTransaction } from "./decoder/interpreter.js";
 import {
   BUY_TOPIC,
   CHAIN_ID,
-  FARCASTER_HUB_URL,
   FRAME_ENDPOINT,
   FRAME_V2_ENDPOINT,
   RPC,
 } from "./constants.js";
-import { HubRestAPIClient } from "@standard-crypto/farcaster-js-hub-rest";
 import { createPublicClient, webSocket, type Hex } from "viem";
 import { getMoxieTokenTypeBySymbol } from "./utils/moxie.js";
 import { Effect } from "effect";
@@ -18,22 +16,12 @@ import {
   constructBuyOrSellMessage,
   constructStakeMessage,
 } from "./utils/messages.js";
-import axios from "axios";
+import { client as fcClient } from "./utils/fc.js";
+
 const signerPrivateKey = process.env.SIGNER_PRIVATE_KEY;
 const fid = process.env.ACCOUNT_FID;
-const axiosInstance = axios.create({
-  headers: {
-    "Content-Type": "application/json",
-    "x-airstack-hubs": process.env.HUB_API_KEY,
-  },
-});
 
 const isDev = process.env.STAGE === "dev";
-
-const client = new HubRestAPIClient({
-  axiosInstance,
-  hubUrl: FARCASTER_HUB_URL,
-});
 
 const wsClient = createPublicClient({
   transport: webSocket(RPC[CHAIN_ID].url),
@@ -51,7 +39,7 @@ async function publishToFarcaster(cast: {
   }
   const mentions = cast.mentions;
 
-  const publishCastResponse = await client.submitCast(
+  const publishCastResponse = await fcClient.submitCast(
     {
       text: cast.text,
       mentions,

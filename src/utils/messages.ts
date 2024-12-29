@@ -76,7 +76,7 @@ export async function constructBuyOrSellMessage(tx: InterpretedTransaction) {
 
   let parentUrl: string | undefined;
 
-  const fanTokenDetails = getFanTokenDetails({
+  const fanTokenDetails = await getFanTokenDetails({
     symbol: fanToken.asset.symbol!,
     name: fanToken.asset.name!,
   });
@@ -149,7 +149,7 @@ export async function constructBurnMessage(
   );
 
   if (fanToken) {
-    const fanTokenDetails = getFanTokenDetails({
+    const fanTokenDetails = await getFanTokenDetails({
       symbol: fanToken.tokenSymbol ?? "",
       name: fanToken.contractName ?? "",
     });
@@ -190,7 +190,7 @@ export async function constructStakeMessage(
     return;
   }
 
-  const fanTokenDetails = getFanTokenDetails({
+  const fanTokenDetails = await getFanTokenDetails({
     symbol: fanToken.asset.symbol,
     name: fanToken.asset.name,
   });

@@ -1,3 +1,5 @@
+import { getFidFromUsername } from "./fc";
+
 export function getMoxieTokenTypeBySymbol(symbol: string) {
   if (symbol.startsWith("fid:")) {
     return "user";
@@ -22,7 +24,7 @@ export function getMoxieTokenTypeBySymbol(symbol: string) {
   return null;
 }
 
-export function getFanTokenDetails({
+export async function getFanTokenDetails({
   symbol,
   name,
 }: {
@@ -44,9 +46,28 @@ export function getFanTokenDetails({
   }
 
   if (assetType === "moxie") {
+    const fcUser = symbol.endsWith("-fc");
+
+    if (fcUser) {
+      const username = symbol.split(":")[1].replace("-fc", "");
+      const fid = await getFidFromUsername(username);
+
+      if (fid) {
+        return {
+          id: fid,
+          name: username,
+          type: "user",
+        };
+      }
+    }
+
     return {
       id: undefined,
-      name: symbol.split(":")[1].replace("-x", "").replace("-fc", "").replace("-base", ""),
+      name: symbol
+        .split(":")[1]
+        .replace("-x", "")
+        .replace("-fc", "")
+        .replace("-base", ""),
       type: assetType,
     };
   }
