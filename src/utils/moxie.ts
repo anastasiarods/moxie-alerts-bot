@@ -67,7 +67,8 @@ export async function getFanTokenDetails({
         .split(":")[1]
         .replace("-x", "")
         .replace("-fc", "")
-        .replace("-base", ""),
+        .replace("-base", "")
+        .replace("-ens", ""),
       type: assetType,
     };
   }

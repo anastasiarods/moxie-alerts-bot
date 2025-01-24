@@ -18,7 +18,9 @@ export const FARCASTER_HUB_URL = process.env.FC_HUB_URL || "";
 export const FRAME_ENDPOINT = "https://decoder-frame.fly.dev/frame";
 export const FRAME_V2_ENDPOINT = "https://reach.3loop.io";
 
+export const SPAM_LIST = ['0x98267d307ac89f24e62de9827dcfc214fa88427c']
+
 //alert categories in moxie
 export const CATEGORIES = {
-  WHALE: 200000,
+  WHALE: 300000,
 };

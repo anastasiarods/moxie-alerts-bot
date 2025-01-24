@@ -6,6 +6,7 @@ import {
   FRAME_ENDPOINT,
   FRAME_V2_ENDPOINT,
   RPC,
+  SPAM_LIST,
 } from "./constants.js";
 import { createPublicClient, webSocket, type Hex } from "viem";
 import { getMoxieTokenTypeBySymbol } from "./utils/moxie.js";
@@ -94,6 +95,8 @@ async function handleTransaction(txHash?: string) {
     });
 
     if (!decoded) return;
+
+    if (SPAM_LIST.includes(decoded.fromAddress.toLowerCase())) return;
 
     const interpreted = await Effect.runPromise(
       interpretTransaction({
