@@ -24,3 +24,5 @@ export const SPAM_LIST = ['0x98267d307ac89f24e62de9827dcfc214fa88427c']
 export const CATEGORIES = {
   WHALE: 300000,
 };
+
+export const MIN_MOXIE = 3000;

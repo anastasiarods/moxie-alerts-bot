@@ -1,4 +1,4 @@
-import { CATEGORIES } from "../constants.js";
+import { CATEGORIES, MIN_MOXIE } from "../constants.js";
 import { getFanTokenDetails } from "./moxie.js";
 import { type InterpretedTransaction } from "@3loop/transaction-interpreter";
 import type { DecodedTransaction } from "@3loop/transaction-decoder";
@@ -110,6 +110,10 @@ export async function constructBuyOrSellMessage(tx: InterpretedTransaction) {
     text += ` on behalf of `;
     mentions.push(beneficiaryInfo?.userId);
     mentionsPositions.push(getTextLengthInBytes(text));
+  }
+
+  if (Number(moxieToken.amount!) >= CATEGORIES.WHALE) {
+    text += `\n\n$$MOXIE`;
   }
 
   return {

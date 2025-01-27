@@ -5,6 +5,7 @@ import {
   CHAIN_ID,
   FRAME_ENDPOINT,
   FRAME_V2_ENDPOINT,
+  MIN_MOXIE,
   RPC,
   SPAM_LIST,
 } from "./constants.js";
@@ -30,7 +31,7 @@ const wsClient = createPublicClient({
 
 async function publishToFarcaster(cast: {
   text: string;
-  url: string;
+  url?: string;
   mentions: number[];
   mentionsPositions: number[];
   parentUrl?: string;
@@ -45,11 +46,14 @@ async function publishToFarcaster(cast: {
       text: cast.text,
       mentions,
       mentionsPositions: cast.mentionsPositions,
-      embeds: [
-        {
-          url: cast.url,
-        },
-      ],
+
+      ...(cast.url && {
+        embeds: [
+          {
+            url: cast.url,
+          },
+        ],
+      }),
     },
     Number(fid),
     signerPrivateKey
@@ -72,7 +76,7 @@ function skipTx(tx: InterpretedTransaction) {
     ? [tx.assetsReceived[0], tx?.assetsSent?.[0]]
     : [tx.assetsSent[0], tx?.assetsReceived?.[0]];
 
-  if (moxieToken?.asset.symbol === "MOXIE" && Number(moxieToken.amount) < 1000)
+  if (moxieToken?.asset.symbol === "MOXIE" && Number(moxieToken.amount) < MIN_MOXIE)
     return true;
 
   const fanTokenType = getMoxieTokenTypeBySymbol(fanToken?.asset.symbol!);
@@ -124,8 +128,8 @@ async function handleTransaction(txHash?: string) {
       return;
     }
 
-    let frameUrl = `${FRAME_ENDPOINT}/${CHAIN_ID}/${txHash}`;
-
+    // let frameUrl = `${FRAME_ENDPOINT}/${CHAIN_ID}/${txHash}`;
+    let frameUrl;
     if (interpreted.type === "swap" || interpreted.type === "stake-token") {
       try {
         const trade = await fetch(`${FRAME_V2_ENDPOINT}/generate-trade`, {
@@ -157,7 +161,7 @@ async function handleTransaction(txHash?: string) {
 
     await publishToFarcaster({
       ...message,
-      url: frameUrl,
+      url: frameUrl ?? undefined,
     });
   } catch (e) {
     console.error(e);
