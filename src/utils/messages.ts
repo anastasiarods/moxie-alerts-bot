@@ -113,7 +113,7 @@ export async function constructBuyOrSellMessage(tx: InterpretedTransaction) {
   }
 
   if (Number(moxieToken.amount!) >= CATEGORIES.WHALE) {
-    text += `\n\n$$MOXIE`;
+    text += `\n\n$MOXIE`;
   }
 
   return {

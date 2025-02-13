@@ -142,9 +142,11 @@ async function handleTransaction(txHash?: string) {
         });
 
         if (trade.ok) {
-          const tradeData = (await trade.json()) as { id?: string };
-          if (tradeData.id) {
-            frameUrl = `${FRAME_V2_ENDPOINT}/frame/v2?tradeId=${tradeData.id}`;
+          const tradeData = (await trade.json()) as {
+            trade: { id?: string };
+          };
+          if (tradeData.trade.id) {
+            frameUrl = `${FRAME_V2_ENDPOINT}/frame/v2?tradeId=${tradeData.trade.id}`;
           }
         }
       } catch (error) {
